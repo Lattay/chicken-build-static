@@ -10,7 +10,7 @@ from dockerhub, unless you proceed to get the image by another mean.
 
 ## Usage
 Copy the *build_static.sh* file to your project and call it with the right
-options. This repo also contain a basic example of how it is used with a small
+options. The *sample* directory contains a basic example of how it is used with a small
 Chicken program and a Makefile.
 
 ```
@@ -28,6 +28,6 @@ COMPILER_OPTIONS            Options to be directly passed to chicken compiler
 ## Support
 
 Supported platform are currently Linux on AMD64 and Linux on ARMv7.
-If you are interested in a different platform please submit an [issue](https://github.com/Lattay/chicken-build-static/issues).
+If you are interested in a different platform please submit an [issue](https://github.com/Lattay/chicken-build-static/issues) as it may need cross compilation.
 
-Supported Chicken version is currently restricted to Chicken 5.2.0 but it should be fairly easy to support other version using an appropriatly modified version of the [base image Dockerfile](https://github.com/Lattay/chicken_docker).
+Supported Chicken version is currently restricted to Chicken 5.2.0 but it should be fairly easy to support other version using an appropriately modified version of the [base image Dockerfile](https://github.com/Lattay/chicken_docker).
