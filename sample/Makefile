@@ -1,5 +1,5 @@
 main:
-	../build_static.sh --egg args --entrypoint src/main.scm
+	../build_static.sh --egg args src/main.scm
 
 clean:
 	rm -r _docker

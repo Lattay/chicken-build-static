@@ -1,14 +1,24 @@
 #!/bin/bash
-dependencies=()
+
+set -euo pipefail
+
 platform=amd64
 version=5.2.0
+bin_name=main
+keep=no
+image_id=""
+entrypoint=""
 sources=()
 options=()
+dependencies=()
 sources_local=()
-entrypoint=main.scm
-bin_name=main
 
 make_dockerfile() {
+    if [[ $keep == yes && -e Dockerfile ]]
+    then
+        return 0
+    fi
+
     cat <<EOF > Dockerfile
 FROM lattay/chicken:$version-$platform
 COPY ${sources_local[@]} /
@@ -28,7 +38,6 @@ build_image() {
         exit 1
     fi
     rm $tmp
-    echo $image_id
 }
 
 extract_artifact() {
@@ -41,61 +50,76 @@ extract_artifact() {
 }
 
 help() {
-    echo "Usage: build_static.sh OPTIONS ... [-- COMPILER_OPTIONS ...]"
+    echo "Usage: build_static.sh OPTIONS... ENTRYPOINT [-- COMPILER_OPTIONS...]"
     echo "Options:"
-    echo "-g, --egg EGG               Add an egg to installed before building the binary"
-    echo "-s, --source SRC_FILE       A source file to copy"
-    echo "-e, --entrypoint FILE_NAME  Filename of the binary entrypoint"
-    echo "-p, --platform PLATFORM     Platform name (amd64 or armv7)"
-    echo "-v, --version VERSION       Chicken version (5.2)"
-    echo "-b, --bin-name BIN_NAME     How the final binary should be called"
-    echo "COMPILER_OPTIONS            Options to be directly passed to chicken compiler"
-
+    echo "-g, --egg EGG            Add an egg to installed before building the binary"
+    echo "-s, --source SRC_FILE    A source file to copy"
+    echo "-p, --platform PLATFORM  Platform name (amd64 or armv7)"
+    echo "-v, --version VERSION    Chicken version (5.2)"
+    echo "-b, --bin-name BIN_NAME  How the final binary should be called"
+    echo "-k, --keep               Do not overwrite the Dockerfile if it already exists"
+    echo "ENTRYPOINT               Filename of the binary entrypoint"
+    echo "COMPILER_OPTIONS         Options to be directly passed to chicken compiler"
 }
+
+help_and_abort() {
+    help
+    exit 1
+}
+
+assert_nz() {
+    [[ -n "$1" ]] || help_and_abort
+}
+
 
 main () (
     while [[ -n "${1:-}" ]]
     do
-        case $1 in
+        case "$1" in
             -g|--egg)
-                shift
-                dependencies+=($1)
+                shift; assert_nz "${1:-}"
+                dependencies+=("$1")
                 ;;
             -s|--source)
-                shift
-                sources+=($1)
-                ;;
-            -e|--entrypoint)
-                shift
-                entrypoint="${1#*/}"
-                sources+=($1)
-                sources_local+=("${1#*/}")
+                shift; assert_nz "${1:-}"
+                sources+=("$1")
                 ;;
             -p|--platform)
-                shift
-                platform=$1
+                shift; assert_nz "${1:-}"
+                platform="$1"
                 ;;
             -v|--version)
-                shift
-                version=$1
+                shift; assert_nz "${1:-}"
+                version="$1"
                 ;;
             -b|--bin-name)
-                shift
-                bin_name=$1
+                shift; assert_nz "${1:-}"
+                bin_name="$1"
                 ;;
             --)
                 shift
                 break
                 ;;
+            -h|--help)
+                help_and_abort
+                ;;
             *)
-                help
-                exit 1
+                if [[ -z "$entrypoint" ]]
+                then
+                    entrypoint="${1#*/}"
+                    sources+=("$1")
+                    sources_local+=("${1#*/}")
+                else
+                    help_and_abort
+                fi
                 ;;
         esac
         shift
     done
 
     options="$@"
+
+    assert_nz "$entrypoint"
 
     mkdir _docker
     
@@ -106,8 +130,6 @@ main () (
     make_dockerfile
 
     build_image
-
-    rm Dockerfile
 
     extract_artifact
 )
