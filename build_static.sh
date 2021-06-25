@@ -12,6 +12,7 @@ sources=()
 options=()
 dependencies=()
 sources_local=()
+static_static=yes
 
 make_dockerfile() {
     if [[ $keep == yes && -e Dockerfile ]]
@@ -19,12 +20,22 @@ make_dockerfile() {
         return 0
     fi
 
-    cat <<EOF > Dockerfile
-FROM lattay/chicken:$version-$platform
+    if [[ $static_static == yes ]]
+    then
+        echo "FROM lattay/chicken-alpine:$platform-$version" > Dockerfile
+    else
+        echo "FROM lattay/chicken:$platform-$version" > Dockerfile
+    fi
+    cat <<EOF >> Dockerfile
 COPY ${sources_local[@]} /
 RUN chicken-install ${dependencies[@]}
-RUN csc -static $options /$entrypoint -o /main
 EOF
+    if [[ $static_static == yes ]]
+    then
+        echo "RUN csc -static -L -static $options /$entrypoint -o /main" >> Dockerfile
+    else
+        echo "RUN csc -static $options /$entrypoint -o /main" >> Dockerfile
+    fi
 }
 
 build_image() {
@@ -58,6 +69,7 @@ help() {
     echo "-v, --version VERSION    Chicken version (5.2)"
     echo "-b, --bin-name BIN_NAME  How the final binary should be called"
     echo "-k, --keep               Do not overwrite the Dockerfile if it already exists"
+    echo "--static                 Build a fully static binary"
     echo "ENTRYPOINT               Filename of the binary entrypoint"
     echo "COMPILER_OPTIONS         Options to be directly passed to chicken compiler"
 }
@@ -96,6 +108,9 @@ main () (
                 shift; assert_nz "${1:-}"
                 bin_name="$1"
                 ;;
+            --static)
+                static_static=yes
+                ;;
             --)
                 shift
                 break
@@ -121,7 +136,7 @@ main () (
 
     assert_nz "$entrypoint"
 
-    mkdir _docker
+    mkdir -p _docker
     
     cp ${sources[@]} _docker -r
 
