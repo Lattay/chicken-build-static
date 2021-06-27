@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-platform=amd64
+platform=linux
+arch=amd64
 version=5.2.0
 bin_name=main
 keep=no
@@ -12,7 +13,7 @@ sources=()
 options=()
 dependencies=()
 sources_local=()
-static_static=yes
+static_static=no
 
 make_dockerfile() {
     if [[ $keep == yes && -e Dockerfile ]]
@@ -20,22 +21,42 @@ make_dockerfile() {
         return 0
     fi
 
+    if [[ $platform == linux ]]
+    then
+        if [[ $static_static == yes ]]
+        then
+            image=lattay/chicken-alpine
+        else
+            image=lattay/chicken
+        fi
+        tag=$version-$arch
+        prefix=""
+    else
+        image=lattay/chicken-mingw
+        prefix=win32-
+        tag=$version
+    fi
+
     if [[ $static_static == yes ]]
     then
-        echo "FROM lattay/chicken-alpine:$platform-$version" > Dockerfile
-    else
-        echo "FROM lattay/chicken:$platform-$version" > Dockerfile
+        options="-L -static $options"
     fi
-    cat <<EOF >> Dockerfile
+
+    if [[ "${#dependencies[@]}" != 0 ]]
+    then
+        echo "${#dependencies[@]}"
+        install_dep="RUN ${prefix}chicken-install ${dependencies[@]}"
+    else
+        install_dep=""
+    fi
+
+    cat <<EOF > Dockerfile
+FROM $image:$tag
 COPY ${sources_local[@]} /
-RUN chicken-install ${dependencies[@]}
+${install_dep}
+RUN ${prefix}csc -static $options /$entrypoint -o /main
 EOF
-    if [[ $static_static == yes ]]
-    then
-        echo "RUN csc -static -L -static $options /$entrypoint -o /main" >> Dockerfile
-    else
-        echo "RUN csc -static $options /$entrypoint -o /main" >> Dockerfile
-    fi
+
 }
 
 build_image() {
@@ -55,7 +76,14 @@ extract_artifact() {
     # Instantiate image
     container_id=$(docker create $image_id)
     # Extract final file
-    docker cp $container_id:/main ../$bin_name
+
+    if [[ $platform == linux ]]
+    then
+        ext=
+    else
+        ext=.exe
+    fi
+    docker cp $container_id:/main${ext} ../$bin_name
     # Delete instance
     docker rm $container_id
 }
@@ -65,7 +93,8 @@ help() {
     echo "Options:"
     echo "-g, --egg EGG            Add an egg to installed before building the binary"
     echo "-s, --source SRC_FILE    A source file to copy"
-    echo "-p, --platform PLATFORM  Platform name (amd64 or armv7)"
+    echo "-a, --arch ARCH          Target architecture name (amd64 or armv7)"
+    echo "-p, --platform PLATFORM  Target platform name (linux or mingw)"
     echo "-v, --version VERSION    Chicken version (5.2)"
     echo "-b, --bin-name BIN_NAME  How the final binary should be called"
     echo "-k, --keep               Do not overwrite the Dockerfile if it already exists"
@@ -100,6 +129,10 @@ main () (
                 shift; assert_nz "${1:-}"
                 platform="$1"
                 ;;
+            -a|--arch)
+                shift; assert_nz "${1:-}"
+                arch="$1"
+                ;;
             -v|--version)
                 shift; assert_nz "${1:-}"
                 version="$1"
@@ -107,6 +140,9 @@ main () (
             -b|--bin-name)
                 shift; assert_nz "${1:-}"
                 bin_name="$1"
+                ;;
+            -k|--keep)
+                keep=yes
                 ;;
             --static)
                 static_static=yes
@@ -131,6 +167,11 @@ main () (
         esac
         shift
     done
+
+    if [[ $platform == mingw && "$bin_name" != *.exe ]]
+    then
+        bin_name=$bin_name.exe
+    fi
 
     options="$@"
 
