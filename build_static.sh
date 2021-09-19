@@ -54,9 +54,19 @@ make_dockerfile() {
 FROM $image:$tag
 COPY ${sources_local[@]} /
 ${install_dep}
-RUN ${prefix}csc -static $options /$entrypoint -o /main
+WORKDIR /
 EOF
 
+    local extensions=""
+    for f in ${sources_local[@]}
+    do
+        if [[ $f != $entrypoint ]]
+        then
+            echo "RUN ${prefix}csc -static -J $f"
+            extensions="$extensions -X ${f%.scm}"
+        fi
+    done >> Dockerfile
+    echo "RUN ${prefix}csc -static $extensions $options $entrypoint -o main" >> Dockerfile
 }
 
 build_image() {
@@ -124,6 +134,7 @@ main () (
             -s|--source)
                 shift; assert_nz "${1:-}"
                 sources+=("$1")
+                sources_local+=("${1#*/}")
                 ;;
             -p|--platform)
                 shift; assert_nz "${1:-}"
